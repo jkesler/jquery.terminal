@@ -59,6 +59,10 @@
     text-indent: -9999em; /* better cursor hiding for Safari and IE */
     top: calc(var(--cursor-line, 0) * 1em);
 }
+.cmd[contenteditable] {
+    outline: none;
+    caret-color: transparent;
+}
 .cmd .noselect, .cmd .noselect span,
 .cmd [role="presentation"]:not(.cursor-line) > span:last-child,
 .cmd .cursor-line > span:last-child > span:last-child {

@@ -4,7 +4,7 @@
  *  __ / // // // // // _  // _// // / / // _  // _//     // //  \/ // _ \/ /
  * /  / // // // // // ___// / / // / / // ___// / / / / // // /\  // // / /__
  * \___//____ \\___//____//_/ _\_  / /_//____//_/ /_/ /_//_//_/ /_/ \__\_\___/
- *           \/              /____/                              version DEV
+ *           \/              /____/                              version 2.0.2
  *
  * This file is part of jQuery Terminal. http://terminal.jcubic.pl
  *
@@ -35,7 +35,7 @@
  * emoji regex v7.0.1 by Mathias Bynens
  * MIT license
  *
- * Date: Sat, 12 Jan 2019 18:33:07 +0000
+ * Date: Sun, 13 Jan 2019 16:30:44 +0000
  */
 
 /* TODO:
@@ -1177,12 +1177,18 @@
         // on mobile the only way to hide textarea on desktop it's needed because
         // textarea show up after focus
         //self.append('<span class="mask"></mask>');
-        var clip = $('<textarea>').attr({
-            autocapitalize: 'off',
-            spellcheck: 'false',
-            tabindex: settings.tabindex
-        }).addClass('clipboard').appendTo(self);
-        if (!is_mobile) {
+        var clip;
+        console.log(settings.inputStyle);
+        if (settings.inputStyle === 'textarea') {
+            clip = $('<textarea>').attr({
+                autocapitalize: 'off',
+                spellcheck: 'false',
+                tabindex: settings.tabindex
+            }).addClass('clipboard').appendTo(self);
+        } else if (settings.inputStyle === 'contenteditable') {
+            self.attr('contenteditable', true);
+        }
+        if (!is_mobile && clip) {
             clip.val(' ');
         }
         if (settings.width) {
@@ -1393,15 +1399,17 @@
                 if (is_function(prompt)) {
                     draw_prompt();
                 }
-                clip.val('');
+                if (clip) {
+                    clip.val('');
+                }
                 return false;
             },
             'SHIFT+ENTER': function() {
                 self.insert('\n');
                 return true;
             },
-            'BACKSPACE': backspace_key,
-            'SHIFT+BACKSPACE': backspace_key,
+            'BACKSPACE': preventDefault(backspace_key),
+            'SHIFT+BACKSPACE': preventDefault(backspace_key),
             'TAB': function() {
                 self.insert('\t');
             },
@@ -1493,8 +1501,8 @@
             'SHIFT+INSERT': paste_event,
             'CTRL+SHIFT+T': return_true, // open closed tab
             'CTRL+W': delete_word_backward(true),
-            'HOLD+BACKSPACE': delete_word_backward(false),
-            'HOLD+SHIFT+BACKSPACE': delete_word_backward(false),
+            'HOLD+BACKSPACE': preventDefault(delete_word_backward(false)),
+            'HOLD+SHIFT+BACKSPACE': preventDefault(delete_word_backward(false)),
             'CTRL+H': function() {
                 if (command !== '' && position > 0) {
                     self['delete'](-1);
@@ -1576,12 +1584,14 @@
         }
         // -------------------------------------------------------------------------------
         function paste_event() {
-            clip.val('');
             paste_count = 0;
-            if (self.isenabled() && !clip.is(':focus')) {
-                clip.trigger('focus', [true]);
+            if (clip) {
+                clip.val('');
+                if (self.isenabled() && !clip.is(':focus')) {
+                    clip.trigger('focus', [true]);
+                }
+                clip.one('input', paste);
             }
-            clip.one('input', paste);
             return true;
         }
         // ---------------------------------------------------------------------
@@ -1600,27 +1610,29 @@
                 set();
             }
             if (self.isenabled()) {
-                //wait until Browser insert text to textarea
-                self.oneTime(100, function() {
-                    var value = clip.val();
-                    if (is_function(settings.onPaste)) {
-                        var ret = settings.onPaste.call(self, {
-                            target: self,
-                            text: value
-                        });
-                        if (ret !== undefined) {
-                            if (ret && is_function(ret.then)) {
-                                ret.then(insert);
-                            } else if (typeof ret === 'string') {
-                                insert(ret);
-                            } else if (ret === false) {
-                                set();
+                if (clip) {
+                    //wait until Browser insert text to textarea
+                    self.oneTime(100, function() {
+                        var value = clip.val();
+                        if (is_function(settings.onPaste)) {
+                            var ret = settings.onPaste.call(self, {
+                                target: self,
+                                text: value
+                            });
+                            if (ret !== undefined) {
+                                if (ret && is_function(ret.then)) {
+                                    ret.then(insert);
+                                } else if (typeof ret === 'string') {
+                                    insert(ret);
+                                } else if (ret === false) {
+                                    set();
+                                }
+                                return;
                             }
-                            return;
                         }
-                    }
-                    insert(value);
-                });
+                        insert(value);
+                    });
+                }
             }
         }
         // -------------------------------------------------------------------------------
@@ -1638,6 +1650,15 @@
         function next_history() {
             self.set(history.end() ? last_command : history.next());
             return false;
+        }
+        // -------------------------------------------------------------------------------
+        function preventDefault(fn) {
+            return function(e) {
+                if (!clip) {
+                    e.preventDefault();
+                }
+                return fn.apply(this, arguments);
+            };
         }
         // -------------------------------------------------------------------------------
         function backspace_key() {
@@ -1679,18 +1700,22 @@
         // -------------------------------------------------------------------------------
         function mobile_focus() {
             //if (is_touch) {
-            var focus = clip.is(':focus');
-            if (enabled) {
-                if (!focus) {
-                    //clip.trigger('focus', [true]);
-                }
-                self.oneTime(10, function() {
-                    if (!clip.is(':focus') && enabled) {
-                        clip.trigger('focus', [true]);
+            if (clip) {
+                var focus = clip.is(':focus');
+                if (enabled) {
+                    if (!focus) {
+                        //clip.trigger('focus', [true]);
                     }
-                });
-            } else if (focus && (is_mobile || !enabled)) {
-                clip.trigger('blur', [true]);
+                    self.oneTime(10, function() {
+                        if (!clip.is(':focus') && enabled) {
+                            clip.trigger('focus', [true]);
+                        }
+                    });
+                } else if (focus && (is_mobile || !enabled)) {
+                    clip.trigger('blur', [true]);
+                }
+            } else {
+                self.focus();
             }
         }
         // -------------------------------------------------------------------------------
@@ -1709,7 +1734,7 @@
                 if (animationName && !animationName.match(/blink/)) {
                     var className = animationName.replace(/terminal-/, '') + '-animation';
                     if (!_class.match(className)) {
-                        _class += ' ' + className;
+                        _class = _class.replace(/\s*$/, ' ') + className;
                     }
                 }
                 if (_class !== self.attr('class')) {
@@ -1723,7 +1748,7 @@
         // data but we put real command and position
         // -------------------------------------------------------------------------------
         function fix_textarea(position_only) {
-            if (!self.isenabled()) {
+            if (!clip || !self.isenabled() ) {
                 return;
             }
             // delay worked while experimenting
@@ -2221,7 +2246,7 @@
                 var in_line = cursor_line.prevUntil('.prompt').length;
                 if (is_css_variables_supported) {
                     self[0].style.setProperty('--cursor-line', in_line);
-                } else {
+                } else if (clip) {
                     clip.css('top', in_line * 14 + 'px');
                 }
                 self.css('visibility', '');
@@ -2619,10 +2644,12 @@
                     enabled = true;
                     self.addClass('enabled');
                     try {
-                        if (clip.is(':not(:focus)')) {
-                            clip.focus();
+                        if (clip) {
+                            if (clip.is(':not(:focus)')) {
+                                clip.focus();
+                            }
+                            clip.caret(position);
                         }
-                        clip.caret(position);
                     } catch (e) {
                         // firefox throw NS_ERROR_FAILURE ignore
                     }
@@ -2741,7 +2768,9 @@
             }
             // Meta+V did bind input but it didin't happen because terminal paste
             // prevent native insert action
-            clip.off('input', paste);
+            if (clip) {
+                clip.off('input', paste);
+            }
             var key = get_key(e);
             if (is_function(settings.keydown)) {
                 result = settings.keydown.call(self, e);
@@ -2814,6 +2843,9 @@
         function keypress_event(e) {
             debug('keypress "' + e.key + '" ' + e.fake);
             clear_hold();
+            if (!clip) {
+                e.preventDefault();
+            }
             var result;
             if (!e.fake) {
                 no_keypress = false;
@@ -2884,6 +2916,10 @@
             debug('input ' + no_keydown + ' || ' + process + ' ((' + no_keypress +
                   ' || ' + dead_key + ') && !' + skip_insert + ' && (' + single_key +
                   ' || ' + no_key + ') && !' + backspace + ')');
+            // TODO: figure out input event in content editable
+            if (!clip) {
+                return;
+            }
             // correct for fake space used for select all context menu hack
             var val = clip.val();
             if (!is_mobile) {
@@ -3470,8 +3506,8 @@
     }
     // -------------------------------------------------------------------------
     $.terminal = {
-        version: 'DEV',
-        date: 'Sat, 12 Jan 2019 18:33:07 +0000',
+        version: '2.0.2',
+        date: 'Sun, 13 Jan 2019 16:30:44 +0000',
         // colors from http://www.w3.org/wiki/CSS/Properties/color/keywords
         color_names: [
             'transparent', 'currentcolor', 'black', 'silver', 'gray', 'white',
@@ -4967,6 +5003,7 @@
         raw: false,
         tabindex: 1,
         invokeMethods: false,
+        inputStyle: 'textarea',
         exceptionHandler: null,
         pauseEvents: true,
         softPause: false,
@@ -8323,6 +8360,7 @@
                 holdTimeout: settings.holdTimeout,
                 holdRepeatTimeout: settings.holdRepeatTimeout,
                 repeatTimeoutKeys: settings.repeatTimeoutKeys,
+                inputStyle: settings.inputStyle,
                 keypress: key_press,
                 tabs: settings.tabs,
                 onPositionChange: function() {
@@ -8454,6 +8492,10 @@
                             if (!$(e.target).is('img,value,audio,object,canvas,a')) {
                                 if (!self.enabled()) {
                                     self.enable();
+                                }
+                                if (!clip.length) {
+                                    command_line.focus();
+                                    return;
                                 }
                                 var offset = command_line.offset();
                                 clip.css({
