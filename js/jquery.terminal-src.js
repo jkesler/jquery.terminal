@@ -1178,7 +1178,6 @@
         // textarea show up after focus
         //self.append('<span class="mask"></mask>');
         var clip;
-        console.log(settings.inputStyle);
         if (settings.inputStyle === 'textarea') {
             clip = $('<textarea>').attr({
                 autocapitalize: 'off',
@@ -1748,7 +1747,7 @@
         // data but we put real command and position
         // -------------------------------------------------------------------------------
         function fix_textarea(position_only) {
-            if (!clip || !self.isenabled() ) {
+            if (!clip || !self.isenabled()) {
                 return;
             }
             // delay worked while experimenting
